@@ -30,7 +30,7 @@ O login é um só para os dois perfis: o app lê o tipo gravado na conta e abre 
 Node.js 20+ e Expo Go (ou simulador). Sem `.env` o app já fala com o Worker em produção.
 
 ```bash
-git clone https://github.com/gabriel-adorno/embarqueai.git
+git clone https://github.com/ORT-0/embarqueai.git
 cd embarqueai
 npm install
 npx expo start
