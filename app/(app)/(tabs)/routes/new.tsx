@@ -70,12 +70,12 @@ export default function NewRouteScreen() {
   const mutation = useMutation({
     mutationFn: async (values: Form) => {
       const names = values.points.map((point) => point.value.trim()).filter(Boolean);
-      const points = await Promise.all(
-        names.map(async (name) => {
-          const coords = await geocodeAddress(name);
-          return { name, ...coords };
-        }),
-      );
+      // Um por vez: cada ponto encontrado orienta a busca do seguinte.
+      const points: { name: string; lat: number; lng: number }[] = [];
+      for (const name of names) {
+        const coords = await geocodeAddress(name, points);
+        points.push({ name, ...coords });
+      }
       return createRoute({
         transporter_id: user!.id,
         name: values.name,

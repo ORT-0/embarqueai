@@ -552,10 +552,13 @@ export function subscribeTripPosition(
   return () => clearInterval(timer);
 }
 
-export async function geocodeAddress(query: string): Promise<{ lat: number; lng: number }> {
+export async function geocodeAddress(
+  query: string,
+  near: { lat: number; lng: number }[] = [],
+): Promise<{ lat: number; lng: number }> {
   return api<{ lat: number; lng: number }>('/maps/geocode', {
     method: 'POST',
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, near }),
   });
 }
 

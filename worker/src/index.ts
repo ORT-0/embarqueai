@@ -590,12 +590,12 @@ gated.post('/routes', async (c) => {
   if (groupIds.length === 0) {
     throw new HTTPException(400, { message: 'Selecione pelo menos um grupo.' });
   }
-  const points = [];
+  const points: { name: string; lat: number; lng: number }[] = [];
   for (const point of body.points) {
-    const coords =
+    const coords: LatLng =
       point.lat != null && point.lng != null
         ? { lat: point.lat, lng: point.lng }
-        : await geocodeAddress(c.env, point.name);
+        : await geocodeAddress(c.env, point.name, points);
     points.push({ name: point.name, ...coords });
   }
   const routes = await rest<RouteRow[]>(c.env, c.get('token'), 'routes', '', {
@@ -688,14 +688,11 @@ gated.patch('/routes/:id', async (c) => {
     }));
   }
 
-  const rows = await rest<RouteRow[]>(c.env, c.get('token'), 'routes', `?id=eq.${routeId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      ...(body.name ? { name: body.name } : {}),
-      outbound_time: body.outbound_time || null,
-      return_time: body.return_time || null,
-    }),
-  });
+  // Pontos: confere a viagem e resolve os endereços antes de gravar qualquer coisa,
+  // para um endereço não encontrado não deixar a rota alterada pela metade.
+  let existingPoints: RoutePoint[] = [];
+  /** Coordenadas novas por índice do ponto em body.points (novo ou renomeado). */
+  const resolved = new Map<number, LatLng>();
   if (body.points?.length) {
     const active = await rest<Trip[]>(
       c.env,
@@ -706,14 +703,43 @@ gated.patch('/routes/:id', async (c) => {
     if (active[0]) {
       throw new HTTPException(400, { message: 'Encerre o trajeto antes de mudar os pontos.' });
     }
-    const existing = await rest<RoutePoint[]>(
+    const found = await rest<RoutePoint[]>(
       c.env,
       c.get('token'),
       'route_points',
-      `?route_id=eq.${routeId}&select=id`,
+      `?route_id=eq.${routeId}&select=id,name,lat,lng`,
     );
+    existingPoints = Array.isArray(found) ? found : [];
+    const byId = new Map(existingPoints.map((point) => [point.id, point]));
+    const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    // Pontos que ficam como estão orientam a busca dos demais.
+    const near: LatLng[] = body.points.flatMap((point) => {
+      const current = point.id ? byId.get(point.id) : undefined;
+      return current && sameName(current.name, point.name)
+        ? [{ lat: current.lat, lng: current.lng }]
+        : [];
+    });
+    for (const [index, point] of body.points.entries()) {
+      const current = point.id ? byId.get(point.id) : undefined;
+      if (current && sameName(current.name, point.name)) continue;
+      // Ponto novo, ou ponto existente cujo texto mudou: o local muda junto.
+      const coords = await geocodeAddress(c.env, point.name, near);
+      resolved.set(index, coords);
+      near.push(coords);
+    }
+  }
+
+  const rows = await rest<RouteRow[]>(c.env, c.get('token'), 'routes', `?id=eq.${routeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(body.name ? { name: body.name } : {}),
+      outbound_time: body.outbound_time || null,
+      return_time: body.return_time || null,
+    }),
+  });
+  if (body.points?.length) {
     const keep = new Set(body.points.map((point) => point.id).filter(Boolean));
-    for (const point of Array.isArray(existing) ? existing : []) {
+    for (const point of existingPoints) {
       if (keep.has(point.id)) continue;
       await rest(c.env, c.get('token'), 'group_members', `?point_id=eq.${point.id}`, {
         method: 'PATCH',
@@ -721,15 +747,20 @@ gated.patch('/routes/:id', async (c) => {
       });
       await rest(c.env, c.get('token'), 'route_points', `?id=eq.${point.id}`, { method: 'DELETE' });
     }
-    for (const point of body.points) {
+    for (const [index, point] of body.points.entries()) {
+      const coords = resolved.get(index);
       if (point.id) {
         await rest(c.env, c.get('token'), 'route_points', `?id=eq.${point.id}&route_id=eq.${routeId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ name: point.name, sort_order: point.sort_order }),
+          body: JSON.stringify({
+            name: point.name,
+            sort_order: point.sort_order,
+            ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+          }),
         });
         continue;
       }
-      const coords = await geocodeAddress(c.env, point.name);
+      if (!coords) continue;
       await rest(c.env, c.get('token'), 'route_points', '', {
         method: 'POST',
         body: JSON.stringify({
@@ -1359,8 +1390,11 @@ gated.post('/trips/:id/stop', async (c) => {
 });
 
 gated.post('/maps/geocode', async (c) => {
-  const body = await c.req.json<{ query: string }>();
-  const coords = await geocodeAddress(c.env, body.query);
+  const body = await c.req.json<{ query: string; near?: LatLng[] }>();
+  const near = (Array.isArray(body.near) ? body.near : [])
+    .filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+    .slice(0, 8);
+  const coords = await geocodeAddress(c.env, body.query, near);
   return c.json(coords);
 });
 

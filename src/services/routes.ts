@@ -92,11 +92,16 @@ export async function updateRoute(
   },
 ): Promise<Route> {
   if (isRemote()) return remote.updateRoute(id, input);
+  // Ponto novo, ou ponto existente cujo texto mudou: o local muda junto.
+  const current = input.points ? await listRoutePoints(id) : [];
+  const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const geocoded = input.points
     ? await Promise.all(
-        input.points.map(async (point) =>
-          point.id ? point : { ...point, ...(await geocodeAddress(point.name)) },
-        ),
+        input.points.map(async (point) => {
+          const before = point.id ? current.find((item) => item.id === point.id) : undefined;
+          if (before && sameName(before.name, point.name)) return point;
+          return { ...point, ...(await geocodeAddress(point.name)) };
+        }),
       )
     : undefined;
   let updated: Route | undefined;
@@ -141,6 +146,11 @@ export async function updateRoute(
           if (!row) continue;
           row.name = point.name;
           row.sort_order = point.sort_order;
+          const moved = point as { lat?: number; lng?: number };
+          if (moved.lat != null && moved.lng != null) {
+            row.lat = moved.lat;
+            row.lng = moved.lng;
+          }
           continue;
         }
         const coords = point as { lat?: number; lng?: number };

@@ -22,11 +22,19 @@ export function renderMap(input: RenderMapInput): RenderMapInput {
   return input;
 }
 
-export async function geocodeAddress(query: string): Promise<{
+/**
+ * Converte o endereço digitado em coordenadas. `near` são os outros pontos da
+ * rota: a busca dá preferência à região deles.
+ */
+export async function geocodeAddress(
+  query: string,
+  near: { lat: number; lng: number }[] = [],
+): Promise<{
   lat: number;
   lng: number;
 }> {
-  if (isRemote()) return remote.geocodeAddress(query);
+  if (isRemote()) return remote.geocodeAddress(query, near);
+  if (query.trim().length < 3) throw new Error('Informe o endereço ou o nome do ponto.');
   let hash = 0;
   for (let i = 0; i < query.length; i += 1) {
     hash = (hash + query.charCodeAt(i) * (i + 1)) % 1000;
