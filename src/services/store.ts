@@ -5,7 +5,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { DEMO_ROUTE_NAME, DEMO_ROUTE_STOPS } from '@/src/lib/demoRoute';
+import { buildDemoData } from '@/src/services/demoSeed';
 import { DEMO_ACCOUNTS, EMAIL_ALIASES, MOCK_PASSWORD, SEED } from '@/src/lib/ids';
 import type {
   Absence,
@@ -23,8 +23,9 @@ import type {
   Vehicle,
 } from '@/src/types/database';
 
-const STORAGE_KEY = '@embarqueai/mock-db-v3';
-const LEGACY_KEYS = ['@embarqueai/mock-db-v1', '@vango/mock-db-v1'];
+// v4: dados de exemplo mais completos. As versões anteriores são descartadas de propósito.
+const STORAGE_KEY = '@embarqueai/mock-db-v4';
+const LEGACY_KEYS: string[] = [];
 
 export type Credential = {
   email: string;
@@ -59,6 +60,7 @@ export type MockDb = {
 };
 
 function seedDb(): MockDb {
+  const demo = buildDemoData(SEED.clientId, SEED.transporterId);
   return {
     profiles: [
       {
@@ -75,6 +77,7 @@ function seedDb(): MockDb {
         phone: '(62) 98888-2222',
         role: 'transporter',
       },
+      ...demo.profiles,
     ],
     credentials: [
       {
@@ -88,47 +91,18 @@ function seedDb(): MockDb {
         user_id: SEED.transporterId,
       },
     ],
-    vehicles: [
-      {
-        id: SEED.vehicleId,
-        transporter_id: SEED.transporterId,
-        type: 'Van',
-        plate: 'MUT-1245',
-      },
-    ],
-    routes: [
-      {
-        id: SEED.routeId,
-        transporter_id: SEED.transporterId,
-        name: DEMO_ROUTE_NAME,
-        status: 'draft',
-      },
-    ],
-    route_points: DEMO_ROUTE_STOPS.map((stop, index) => ({
-      id: [SEED.pointA, SEED.pointB, SEED.pointC][index],
-      route_id: SEED.routeId,
-      name: stop.name,
-      lat: stop.lat,
-      lng: stop.lng,
-      sort_order: index,
-    })),
-    groups: [
-      {
-        id: SEED.groupId,
-        name: 'Van do Afonso',
-        vehicle_id: SEED.vehicleId,
-        route_id: SEED.routeId,
-        transporter_id: SEED.transporterId,
-      },
-    ],
-    group_members: [{ group_id: SEED.groupId, user_id: SEED.clientId }],
-    trips: [],
+    vehicles: demo.vehicles,
+    routes: demo.routes,
+    route_points: demo.route_points,
+    groups: demo.groups,
+    group_members: demo.group_members,
+    trips: demo.trips,
     trip_positions: [],
-    boardings: [],
-    absences: [],
-    follows: [],
-    trip_alerts: [],
-    trip_alert_replies: [],
+    boardings: demo.boardings,
+    absences: demo.absences,
+    follows: demo.follows,
+    trip_alerts: demo.trip_alerts,
+    trip_alert_replies: demo.trip_alert_replies,
     pending_accounts: [],
     pending_otp_email: null,
   };

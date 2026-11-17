@@ -1310,7 +1310,8 @@ gated.get('/reports', async (c) => {
   for (const trip of list) {
     const [routeRows, boardingRows, absenceRows] = await Promise.all([
       rest<RouteRow[]>(c.env, c.get('token'), 'routes', `?id=eq.${trip.route_id}&select=name`),
-      rest<{ status: string }[]>(c.env, c.get('token'), 'boardings', `?trip_id=eq.${trip.id}&status=eq.boarded`),
+      // Quem embarcou e depois desembarcou também viajou: conta os dois status.
+      rest<{ status: string }[]>(c.env, c.get('token'), 'boardings', `?trip_id=eq.${trip.id}&status=in.(boarded,alighted)`),
       rest<{ id: string }[]>(
         c.env,
         c.get('token'),
