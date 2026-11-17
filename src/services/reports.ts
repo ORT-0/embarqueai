@@ -20,7 +20,7 @@ export async function getReport(): Promise<ReportSummary> {
   let absences = 0;
   const rows = trips.map((trip) => {
     const boardedCount = (db.boardings ?? []).filter(
-      (item) => item.trip_id === trip.id && item.status === 'boarded',
+      (item) => item.trip_id === trip.id && (item.status === 'boarded' || item.status === 'alighted'),
     ).length;
     const day = trip.started_at.slice(0, 10);
     const absentCount = (db.absences ?? []).filter(
